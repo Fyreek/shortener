@@ -1,4 +1,4 @@
-package random
+package security
 
 import (
 	"math/rand"
@@ -12,12 +12,12 @@ const (
 )
 
 // Seed seeds the random functions for this application
-func Seed() {
+func RandomSeed() {
 	rand.Seed(time.Now().UTC().UnixNano())
 }
 
 // String generates a random string with length of n
-func String(n int) string {
+func GetRandomString(n int) string {
 	b := make([]byte, n)
 	for i := 0; i < n; {
 		if idx := int(rand.Int63() & letterIdxMask); idx < len(letterBytes) {
