@@ -14,21 +14,12 @@ import (
 	"github.com/fyreek/shortener/shorts"
 )
 
-// var sMap map[string]*shorts.Shorts
 var shortLength = 7
 
 func main() {
-	// dbClient, err := db.GetClient("localhost:6379", "", 0)
-	// if err != nil {
-	// 	fmt.Println("Could not connect to database " + err.Error())
-	// 	return
-	// }
-
-	// logging.SetLogLevel(config.Configuration.Logging.LogLevel)
 	logging.SetLogLevel(0)
 
 	mDB := &db.MongoDB{}
-	// err := mDB.Connect(config.Configuration.Database.IP, config.Configuration.Database.Port, config.Configuration.Database.Timeout)
 	err := mDB.Connect("localhost", 27017, 10)
 	if err != nil {
 		logging.Log(logging.Failure, "Could not connect to database:", err)
@@ -39,11 +30,9 @@ func main() {
 		logging.Log(logging.Failure, "Database connection is not open")
 		return
 	}
-	// mDB.SetDatabase(config.Configuration.Database.Database)
 	mDB.SetDatabase("shortener")
 
 	security.RandomSeed()
-	// sMap = make(map[string]*shorts.Shorts)
 	router := gin.Default()
 	// TODO: Move routes from main into own file
 	router.POST("/url", func(c *gin.Context) {
@@ -75,7 +64,6 @@ func main() {
 		}
 
 		s := shorts.New(sInput.URL, manageID, shortLength)
-		// err = dbClient.SetValueStruct(s.Short, s)
 		err = s.Save(mDB)
 		if err != nil {
 			c.JSON(500, gin.H{
@@ -150,6 +138,15 @@ func main() {
 			return
 		}
 
+		if len(*s) == 0 {
+			c.JSON(404, gin.H{
+				"success": "false",
+				"error":   "No shorts found for this manage id",
+				"data":    "",
+			})
+			return
+		}
+
 		response := gin.H{
 			"success": "true",
 			"error":   "",
@@ -180,8 +177,7 @@ func main() {
 			})
 			return
 		}
-		// s, ok := sMap[url]
-		// val, err := dbClient.GetValue(url)
+
 		s, err := shorts.GetShort(url, mDB)
 		if err != nil {
 			c.JSON(404, gin.H{
@@ -194,11 +190,75 @@ func main() {
 
 		_ = s.Visit(mDB)
 		fmt.Println("This url was used", s.Visits, "times")
-		fmt.Println("s got " + string(s.Visits) + " visits")
-		// _ = dbClient.SetValueStruct(s.Short, s)
 		c.Header("Cache-Control", "no-cache")
 		c.Redirect(301, s.URL)
 		c.Abort()
+	})
+	router.DELETE("/m/:manageId/:url", func(c *gin.Context) {
+		manageID := c.Param("manageId")
+		if manageID == "" {
+			c.JSON(400, gin.H{
+				"success": "false",
+				"error":   "No manage id was provided",
+				"data":    "",
+			})
+			return
+		}
+		manageID, err := security.ParseUUIDString(manageID)
+		if err != nil && err != security.ErrEmptyUUID {
+			c.JSON(400, gin.H{
+				"success": "false",
+				"error":   "Provided manage id was not valid",
+				"data":    "",
+			})
+			return
+		}
+
+		url := c.Param("url")
+		if url == "" {
+			c.JSON(400, gin.H{
+				"success": "false",
+				"error":   "No short was provided",
+				"data":    "",
+			})
+			return
+		}
+
+		s, err := shorts.GetShort(url, mDB)
+		if err != nil {
+			c.JSON(404, gin.H{
+				"success": "false",
+				"error":   "Url not found",
+				"data":    "",
+			})
+			return
+		}
+
+		if s.ManageID != manageID {
+			c.JSON(404, gin.H{
+				"success": "false",
+				"error":   "Provided url does not match manage id",
+				"data":    "",
+			})
+			return
+		}
+
+		err = s.Delete(mDB)
+		if err != nil {
+			logging.Log(logging.Failure, "Error on deleting short from db", err)
+			c.JSON(500, gin.H{
+				"success": "false",
+				"error":   "Could not delete short from database",
+				"data":    "",
+			})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"success": "true",
+			"error":   "",
+			"data":    "",
+		})
 	})
 	log.Fatal(router.Run(":8080"))
 }

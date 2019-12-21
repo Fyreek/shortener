@@ -61,6 +61,16 @@ func (s *Shorts) Save(dBase db.Database) error {
 	return err
 }
 
+// Delete deletes the short it is called on from the database
+func (s *Shorts) Delete(dBase db.Database) error {
+	err := dBase.DeleteSingleEntry("shorts", "short", s.Short)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetShort returns a single short by its short url
 func GetShort(short string, dBase db.Database) (*Shorts, error) {
 	s := Shorts{}
